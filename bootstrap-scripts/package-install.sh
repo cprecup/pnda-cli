@@ -39,7 +39,7 @@ fi
 if [ "x$privateSubnetCidr" != "x" ]; then
 iptables -A LOGGING -d  ${privateSubnetCidr} -j ACCEPT
 fi
-iptables -A LOGGING -j REJECT --reject-with icmp-net-unreachable
+#iptables -A LOGGING -j REJECT --reject-with icmp-net-unreachable
 iptables-save > /etc/iptables.conf
 echo -e '#!/bin/sh\niptables-restore < /etc/iptables.conf' > /etc/rc.local
 chmod +x /etc/rc.d/rc.local | true
