@@ -19,6 +19,16 @@ cat << EOF > /etc/salt/master
 ## specific PNDA saltmaster config
 auto_accept: False      # do not auto accept minion key on new minion provisioning
 
+# Allow the master to look into its minion's custom modules (e.g. the pnda.py)
+module_dirs:
+  - /var/cache/salt/minion/extmods
+
+# Increase number of workers for the salt master
+worker_threads: 40
+
+# Increase the secondary timeout of the master that does the find_job query
+gather_job_timeout: 10
+
 fileserver_backend:
   - roots
   - minion
@@ -58,6 +68,7 @@ if [ "x$PLATFORM_GIT_REPO_URI" != "x" ]; then
   # This mode is not normally used now the public github is available
   chmod 400 /tmp/git.pem || true
 
+  mkdir /root/.ssh
   echo "Host $PLATFORM_GIT_REPO_HOST" >> /root/.ssh/config
   echo "  IdentityFile /tmp/git.pem" >> /root/.ssh/config
   echo "  StrictHostKeyChecking no" >> /root/.ssh/config
