@@ -177,7 +177,7 @@ class TerraformBackend(BaseBackend):
         # look at using metadata to carry this information like with the other
         # backend impls instead of reverse engineering it from the node name
         if name == 'hadoop-mgr':
-            node_type = 'hadoop-mgr-%s' % (idx+1)
+            node_type = 'hadoop-mgr'
             node_name = 'hadoop-mgr-%s' % (idx+1)
         elif name in ['datanode', 'kafkanode', 'zookeeper', 'opentsdb']:
             node_type = name
