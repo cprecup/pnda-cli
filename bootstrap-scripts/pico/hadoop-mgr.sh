@@ -21,6 +21,7 @@ roles:
   - oozie_database
   - oozie_server
   - mysql_connector
+  - mysql_server
   - opentsdb
   - grafana
 
