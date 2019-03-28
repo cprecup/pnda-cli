@@ -585,21 +585,28 @@ class BaseBackend(object):
         # changes to resolv.conf (see https://github.com/saltstack/salt/issues/21397)
         # We then wait 60 seconds before continuing with highstate to allow the minions to restart
         # An improvement would be running a test.ping and waiting for all expected minions to be ready
-        CONSOLE.info('Installing Consul')
-        self._ssh_client.ssh(['(sudo salt -v --log-level=debug --timeout=120 --state-output=mixed'
-                              ' -C "G@pnda:is_new_node" state.sls base-services queue=True 2>&1)'
-                              ' | tee -a pnda-salt.log; %s' % THROW_BASH_ERROR], saltmaster_ip)
         CONSOLE.info('Restarting minions')
         self._restart_minions([instance_map[h]['private_ip_address'] for h in instance_map], bastion_used)
         CONSOLE.info('Refreshing salt mines')
         self._ssh_client.ssh(['(sudo salt -v --log-level=debug --timeout=120 --state-output=mixed "*" mine.update 2>&1) | tee -a pnda-salt.log; %s'
                               % THROW_BASH_ERROR], saltmaster_ip)
 
+        # Sleep 10 minutes to allow the Consul task to complete
+        CONSOLE.info('Will sleep for 10 minutes...')
+        time.sleep(600)
+        CONSOLE.info('Woke up.')
+
+        CONSOLE.info('Installing Consul')
+        self._ssh_client.ssh(['(sudo salt -v --log-level=debug --timeout=120 --state-output=mixed'
+                              ' -C "G@pnda:is_new_node" state.sls base-services queue=True)'
+                              ' | tee -a pnda-salt.log; %s' % THROW_BASH_ERROR], saltmaster_ip)
+
         CONSOLE.info('Continuing with installation of PNDA')
         salt_commands = ['(sudo salt -v --log-level=debug --timeout=120 --state-output=mixed -C "G@pnda:is_new_node" state.highstate queue=True 2>&1)' +
                          ' | tee -a pnda-salt.log; %s' % THROW_BASH_ERROR]
         if orchestrate_runner:
             CONSOLE.info('Including orchestrate because new Hadoop datanodes are being added')
+            CONSOLE.info('will use cluster = %s, orchestrate_runner = %s', self._cluster, orchestrate_runner)
             salt_commands.append('(sudo CLUSTER=%s salt-run --log-level=debug state.orchestrate orchestrate.%s 2>&1)' % (self._cluster, orchestrate_runner) +
                                  ' | tee -a pnda-salt.log; %s' % THROW_BASH_ERROR)
 
