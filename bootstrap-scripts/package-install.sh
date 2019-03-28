@@ -39,7 +39,10 @@ fi
 if [ "x$privateSubnetCidr" != "x" ]; then
 iptables -A LOGGING -d  ${privateSubnetCidr} -j ACCEPT
 fi
-iptables -A LOGGING -j REJECT --reject-with icmp-net-unreachable
+
+## Comment out the following line for pulling from external base repo
+# iptables -A LOGGING -j REJECT --reject-with icmp-net-unreachable
+
 iptables-save > /etc/iptables.conf
 echo -e '#!/bin/sh\niptables-restore < /etc/iptables.conf' > /etc/rc.local
 chmod +x /etc/rc.d/rc.local | true
@@ -47,11 +50,17 @@ fi
 
 DISTRO=$(cat /etc/*-release|grep ^ID\=|awk -F\= {'print $2'}|sed s/\"//g)
 
+## Workaround: remove other yum repositories if we use the offline mirror
+[[ -n ${ADDITIONAL_REPOS} ]] && rm -rf /etc/yum.repos.d/*
+
+## Add additional repositories beforehand. This is needed when using an
+## offline mirror in order to have all the packages available offline
+[[ -n ${ADDITIONAL_REPOS} ]] && echo "${ADDITIONAL_REPOS}" > /etc/yum.repos.d/pnda.repo
+
 yum install -y yum-utils yum-plugin-priorities
 
 yum-config-manager --setopt=\*.priority=50 --save \*
 
-[[ -n ${ADDITIONAL_REPOS} ]] && echo "${ADDITIONAL_REPOS}" > /etc/yum.repos.d/pnda.repo
 
 # From versions.sh
 export ANACONDA_VERSION="5.1.0"
@@ -71,18 +80,19 @@ export AMBARI_LEGACY_PACKAGE_VERSION="2.6.1.0-143"
 export HDP_VERSION="2.6.5.0"
 export HDP_UTILS_VERSION="1.1.0.22"
 
-RPM_EPEL=https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-RPM_EPEL_KEY=https://archive.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-7
-MY_SQL_REPO=https://repo.mysql.com/yum/mysql-5.5-community/el/7/x86_64/
-MY_SQL_REPO_KEY=https://repo.mysql.com/RPM-GPG-KEY-mysql
-CLOUDERA_MANAGER_REPO=http://archive.cloudera.com/cm5/redhat/7/x86_64/cm/${CLOUDERA_MANAGER_VERSION}/
-CLOUDERA_MANAGER_REPO_KEY=https://archive.cloudera.com/cm5/redhat/7/x86_64/cm/RPM-GPG-KEY-cloudera
-SALT_REPO=https://repo.saltstack.com/yum/redhat/7/x86_64/archive/${SALTSTACK_VERSION}
-SALT_REPO_KEY=https://repo.saltstack.com/yum/redhat/7/x86_64/archive/${SALTSTACK_VERSION}/SALTSTACK-GPG-KEY.pub
-SALT_REPO_KEY2=http://repo.saltstack.com/yum/redhat/7/x86_64/${SALTSTACK_REPO}/base/RPM-GPG-KEY-CentOS-7
-[[ -z ${AMBARI_REPO} ]] && export AMBARI_REPO=http://public-repo-1.hortonworks.com/ambari/centos7/2.x/updates/${AMBARI_VERSION}/ambari.repo
-[[ -z ${AMBARI_LEGACY_REPO} ]] && export AMBARI_LEGACY_REPO=http://public-repo-1.hortonworks.com/ambari/centos7/2.x/updates/${AMBARI_LEGACY_VERSION}/ambari.repo
-[[ -z ${AMBARI_REPO_KEY} ]] && export AMBARI_REPO_KEY=http://public-repo-1.hortonworks.com/ambari/centos7/RPM-GPG-KEY/RPM-GPG-KEY-Jenkins
+## Comment out these for offline mirror
+#RPM_EPEL=https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+#RPM_EPEL_KEY=https://archive.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-7
+#MY_SQL_REPO=https://repo.mysql.com/yum/mysql-5.5-community/el/7/x86_64/
+#MY_SQL_REPO_KEY=https://repo.mysql.com/RPM-GPG-KEY-mysql
+#CLOUDERA_MANAGER_REPO=http://archive.cloudera.com/cm5/redhat/7/x86_64/cm/${CLOUDERA_MANAGER_VERSION}/
+#CLOUDERA_MANAGER_REPO_KEY=https://archive.cloudera.com/cm5/redhat/7/x86_64/cm/RPM-GPG-KEY-cloudera
+#SALT_REPO=https://repo.saltstack.com/yum/redhat/7/x86_64/archive/${SALTSTACK_VERSION}
+#SALT_REPO_KEY=https://repo.saltstack.com/yum/redhat/7/x86_64/archive/${SALTSTACK_VERSION}/SALTSTACK-GPG-KEY.pub
+#SALT_REPO_KEY2=http://repo.saltstack.com/yum/redhat/7/x86_64/${SALTSTACK_REPO}/base/RPM-GPG-KEY-CentOS-7
+#[[ -z ${AMBARI_REPO} ]] && export AMBARI_REPO=http://public-repo-1.hortonworks.com/ambari/centos7/2.x/updates/${AMBARI_VERSION}/ambari.repo
+#[[ -z ${AMBARI_LEGACY_REPO} ]] && export AMBARI_LEGACY_REPO=http://public-repo-1.hortonworks.com/ambari/centos7/2.x/updates/${AMBARI_LEGACY_VERSION}/ambari.repo
+#[[ -z ${AMBARI_REPO_KEY} ]] && export AMBARI_REPO_KEY=http://public-repo-1.hortonworks.com/ambari/centos7/RPM-GPG-KEY/RPM-GPG-KEY-Jenkins
 
 OFFLINE_KEYS_LIST="-LOJf ${PNDA_MIRROR}/mirror_rpm/RPM-GPG-KEY-EPEL-7 \
                    -LOJf ${PNDA_MIRROR}/mirror_rpm/RPM-GPG-KEY-mysql \
@@ -111,25 +121,29 @@ gpgcheck = 1
 keepcache = 0
 EOF
 
-else
-  curl -LOJf "${RPM_EPEL_KEY}" \
-	   -LOJf "${MY_SQL_REPO_KEY}" \
-	   -LOJf "${CLOUDERA_MANAGER_REPO_KEY}" \
-	   -LOJf "${SALT_REPO_KEY}" \
-	   -LOJf "${SALT_REPO_KEY2}" \
-	   -LOJf "${AMBARI_REPO_KEY}"
-
-  RPM_EXTRAS=$RPM_EXTRAS_REPO_NAME
-  RPM_OPTIONAL=$RPM_OPTIONAL_REPO_NAME
-  yum-config-manager --setopt=\*.priority=50 --save --enable $RPM_EXTRAS $RPM_OPTIONAL
-  yum-config-manager --setopt=\*.priority=50 --save --add-repo $MY_SQL_REPO
-  yum-config-manager --setopt=\*.priority=50 --save --add-repo $CLOUDERA_MANAGER_REPO
-  yum-config-manager --setopt=\*.priority=50 --save --add-repo $SALT_REPO
-  yum-config-manager --setopt=\*.priority=50 --save --add-repo $AMBARI_REPO
-  curl -LJ -o /etc/yum.repos.d/ambari-legacy.repo $AMBARI_LEGACY_REPO
-  yum install -y $RPM_EPEL || true
-  yum-config-manager --setopt=\*.priority=50 --save \*epel\*
 fi
+
+## Comment out these for offline mirror
+#else
+#  curl -LOJf "${RPM_EPEL_KEY}" \
+#	   -LOJf "${MY_SQL_REPO_KEY}" \
+#	   -LOJf "${CLOUDERA_MANAGER_REPO_KEY}" \
+#	   -LOJf "${SALT_REPO_KEY}" \
+#	   -LOJf "${SALT_REPO_KEY2}" \
+#	   -LOJf "${AMBARI_REPO_KEY}"
+
+#  RPM_EXTRAS=$RPM_EXTRAS_REPO_NAME
+#  RPM_OPTIONAL=$RPM_OPTIONAL_REPO_NAME
+#  yum-config-manager --setopt=\*.priority=50 --save --enable $RPM_EXTRAS $RPM_OPTIONAL
+#  yum-config-manager --setopt=\*.priority=50 --save --add-repo $MY_SQL_REPO
+#  yum-config-manager --setopt=\*.priority=50 --save --add-repo $CLOUDERA_MANAGER_REPO
+#  yum-config-manager --setopt=\*.priority=50 --save --add-repo $SALT_REPO
+#  yum-config-manager --setopt=\*.priority=50 --save --add-repo $AMBARI_REPO
+#  curl -LJ -o /etc/yum.repos.d/ambari-legacy.repo $AMBARI_LEGACY_REPO
+#  yum install -y $RPM_EPEL || true
+#  yum-config-manager --setopt=\*.priority=50 --save \*epel\*
+#  echo "I added more repos to YUM" > /home/centos/more-yum-repos
+#fi
 rpm --import *
 
 yum install -y deltarpm
